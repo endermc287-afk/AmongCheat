@@ -21,42 +21,43 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Find Android Project
-        id: project
+      - name: Extract ZIP
         run: |
-          echo "Repository files:"
-          find . -maxdepth 5 -type f | head -200
+          mkdir -p project
+          unzip -q amongushile.zip -d project
+          echo "ZIP extracted:"
+          find project -maxdepth 4 -type f | head -150
 
-          WRAPPER=$(find . -type f -name gradlew | head -n 1)
+      - name: Find Gradle Project
+        id: locate
+        run: |
+          WRAPPER=$(find project -type f -name gradlew | head -n 1)
 
-          if [ -n "$WRAPPER" ]; then
-            PROJECT_DIR=$(dirname "$WRAPPER")
-            echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-            echo "type=wrapper" >> "$GITHUB_OUTPUT"
-          else
-            GRADLE=$(find . -type f \( -name build.gradle -o -name build.gradle.kts \) | head -n 1)
-            if [ -z "$GRADLE" ]; then
-              echo "No Gradle project found!"
-              exit 1
-            fi
-            PROJECT_DIR=$(dirname "$GRADLE")
-            echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-            echo "type=system" >> "$GITHUB_OUTPUT"
+          if [ -z "$WRAPPER" ]; then
+            echo "ERROR: ZIP içinde gradlew bulunamadı."
+            find project -type f | head -200
+            exit 1
           fi
+
+          DIR=$(dirname "$WRAPPER")
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
       - name: Build APK
-        working-directory: ${{ steps.project.outputs.dir }}
+        working-directory: ${{ steps.locate.outputs.dir }}
         run: |
-          if [ "${{ steps.project.outputs.type }}" = "wrapper" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug --no-daemon --stacktrace
-          else
-            gradle assembleDebug --no-daemon --stacktrace
-          fi
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Collect APK
+        if: success()
+        run: |
+          mkdir -p artifacts
+          find project -type f -path '*/build/outputs/apk/*' -name '*.apk' -exec cp {} artifacts/ \;
+          ls -lh artifacts
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AmongCheat-APK
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: artifacts/*.apk
           if-no-files-found: error
