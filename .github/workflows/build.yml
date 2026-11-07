@@ -1,5 +1,5 @@
 
-name: Android APK Build
+name: AmongCheat APK Build
 
 on:
   workflow_dispatch:
@@ -21,43 +21,28 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Extract ZIP
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Extract Project
         run: |
-          mkdir -p project
           unzip -q amongushile.zip -d project
-          echo "ZIP extracted:"
-          find project -maxdepth 4 -type f | head -150
 
-      - name: Find Gradle Project
-        id: locate
+      - name: Configure Android SDK
+        working-directory: project/amongushile
         run: |
-          WRAPPER=$(find project -type f -name gradlew | head -n 1)
-
-          if [ -z "$WRAPPER" ]; then
-            echo "ERROR: ZIP içinde gradlew bulunamadı."
-            find project -type f | head -200
-            exit 1
-          fi
-
-          DIR=$(dirname "$WRAPPER")
-          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
 
       - name: Build APK
-        working-directory: ${{ steps.locate.outputs.dir }}
+        working-directory: project/amongushile
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Collect APK
-        if: success()
-        run: |
-          mkdir -p artifacts
-          find project -type f -path '*/build/outputs/apk/*' -name '*.apk' -exec cp {} artifacts/ \;
-          ls -lh artifacts
+          gradle :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AmongCheat-APK
-          path: artifacts/*.apk
+          path: project/amongushile/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
